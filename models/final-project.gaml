@@ -10,7 +10,14 @@ model finalproject
 
 global {
 	
-	float step <- 1 #day;	
+	// SIMULATION
+	
+	float step <- 1 #day;
+	float surface <- 250 #m;
+	geometry shape <- square(surface);
+	
+	// TREE
+	
 	int nb_aspen_init <- 5;
 	int nb_cottonwood_init <- 5;
 	int nb_willow_init <- 5;
@@ -21,13 +28,87 @@ global {
 	
 	float prey_proba_spread <- 0.0001;
 	
-	float surface <- 250 #m;
-	geometry shape <- square(surface);
+	// WAPITI
+	
+	int nb_wapiti <- 10;
+	
+	string tree_at_location <- "tree_at_location";
+	string not_available_location <- "not_available_location";
+	
+	predicate tree_location <- new_predicate(tree_at_location);
+	predicate choose_tree <- new_predicate("choose a tree");
+	predicate is_available <- new_predicate("eat tree");
+	predicate find_tree <- new_predicate("find tree");
+	predicate eat_tree <- new_predicate("eat tree");
 	
 	init {
 		create aspen number: nb_aspen_init;
 		create cottonwood number: nb_cottonwood_init;
 		create willow number: nb_willow_init;
+		
+		create wapiti number: nb_wapiti;
+	}
+}
+
+species wapiti skills: [moving] control: simple_bdi {
+	float view_dist <- 20#m;
+	float speed <- 2#km/#h;
+	rgb color <- rgb(155, 107, 89);
+	point target;
+	int energy;
+	
+	init {
+		do add_desire(find_tree);
+	}
+	
+	perceive target: tree where (each.size < 1#m) in: view_dist {
+		focus id: tree_at_location var: location;
+		ask myself {
+			do remove_intention(find_tree, false);
+		}
+	}
+	
+	rule belief: tree_location new_desire: is_available strength: 2.0;
+	
+	plan lets_wander intention: find_tree  {
+        do wander;
+    }
+    
+    plan get_tree intention: is_available {
+	    if (target = nil) {
+	        do add_subintention(get_current_intention(),choose_tree, true);
+	        do current_intention_on_hold();
+	    } else {
+	        do goto target: target ;
+	        if (target = location)  {
+	        tree current_tree<- tree first_with (target = each.location);
+	        if current_tree.size < 1.0#m {
+	            do add_belief(is_available);
+	            ask current_tree {
+	            	size <- 0.1;
+	            }    
+	        } else {
+	            do add_belief(new_predicate(not_available_location, ["location_value"::target]));
+	        }
+	        target <- nil;
+	        }
+	    }
+    }
+    
+    plan choose_closest_tree intention: choose_tree instantaneous: true {
+	    list<point> possible_trees <- get_beliefs_with_name(tree_at_location) collect (point(get_predicate(mental_state (each)).values["location_value"]));
+	    list<point> empty_trees <- get_beliefs_with_name(not_available_location) collect (point(get_predicate(mental_state (each)).values["location_value"]));
+	    possible_trees <- possible_trees - empty_trees;
+	    if (empty(possible_trees)) {
+	        do remove_intention(is_available, true); 
+	    } else {
+	        target <- (possible_trees with_min_of (each distance_to self)).location;
+	    }
+	    do remove_intention(choose_tree, true); 
+    }
+	
+	aspect default {
+		draw circle(200#cm) color: color border: #black;
 	}
 }
 
@@ -92,6 +173,8 @@ experiment TreeBdi type: gui {
 			species aspen;
 			species cottonwood;
 			species willow;
+			
+			species wapiti;
 		}
 	
 		monitor "Number of aspens" value: nb_aspens;
