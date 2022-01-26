@@ -57,14 +57,13 @@ species wapiti skills: [moving] control: simple_bdi {
     float speed <- 1#km/#h;
     rgb color <- rgb(155, 107, 89);
     point target;
-    int gold_sold;
     
     init {
         do add_desire(find_tree);
     }
     
     perceive target: tree where (each.size < 1#m) in: view_dist {
-    focus id: tree_at_location var:location;
+    	focus id: tree_at_location var:location;
 	    ask myself {
 	        do remove_intention(find_tree, false);
 	    }
@@ -77,11 +76,36 @@ species wapiti skills: [moving] control: simple_bdi {
         do wander;
     }
     
-//    plan eat_tree intention: is_available {
-//    	if (target = nil) {
-//    		do add_subintention(get_current_intention(), choose_tree, true);
-//    	}
-//    }
+    plan eat_tree intention: is_available {
+    	if (target = nil) {
+    		do add_subintention(get_current_intention(), choose_tree, true);
+    		do current_intention_on_hold();
+    	} else {
+    		do goto target: target;
+    		if (target = location) {
+    			tree current_tree <- tree first_with (target = each.location);
+    			if current_tree.size < 1#m {
+    				do add_belief(is_available);
+    				ask current_tree {size <- 0.1#m;}
+    			} else {
+    				do add_belief(new_predicate(not_available_location, ["location_value"::target]));
+    			}
+    			target <- nil;
+    		}
+    	}
+    }
+    
+    plan choose_closest_tree intention: choose_tree instantaneous: true {
+    	list<point> possible_trees <- get_beliefs_with_name(tree_at_location) collect (point(get_predicate(mental_state (each)).values["location_value"]));
+    	list<point> not_available_trees <- get_beliefs_with_name(not_available_location) collect (point(get_predicate(mental_state (each)).values["location_value"]));
+    	possible_trees <- possible_trees - not_available_trees;
+    	if (empty(possible_trees)) {
+    		do remove_intention(eat_tree, true);
+    	} else {
+    		target <- (possible_trees with_min_of (each distance_to self)).location;
+    	}
+    	do remove_intention(choose_tree, true);
+    }
     
     aspect default {
       draw circle(3#m) color: color border: #black;
