@@ -13,24 +13,20 @@ global {
 	// SIMULATION
 	
 	float step <- 1#minute;
-	float surface <- 1#km;
+	float surface <- 250#m;
 	geometry shape <- square(surface);
 	
 	// TREE
 	
-	int nb_aspen_init <- 5;
-	int nb_cottonwood_init <- 5;
-	int nb_willow_init <- 5;
+	int nb_tree_init <- 10;
 	
-	int nb_aspens -> {length(aspen)};
-	int nb_cottonwoods -> {length(cottonwood)};
-	int nb_willows -> {length(willow)};
+	int nb_trees -> {length(tree)};
 	
 	float prey_proba_spread <- 0.0001;
 	
 	// WAPITI
 	
-	int nb_wapiti <- 10;
+	int nb_wapiti <- 2;
 	
 	string tree_at_location <- "tree_at_location";
 	string not_available_location <- "not_available_location";
@@ -43,9 +39,7 @@ global {
 	predicate eat_tree <- new_predicate("eat tree");
 	
 	init {
-		create aspen number: nb_aspen_init;
-		create cottonwood number: nb_cottonwood_init;
-		create willow number: nb_willow_init;
+		create tree number: nb_tree_init;
 		
 		create wapiti number: nb_wapiti;
 	}
@@ -62,7 +56,7 @@ species wapiti skills: [moving] control: simple_bdi {
         do add_desire(find_tree);
     }
     
-    perceive target: tree where (each.size < 1#m) in: view_dist {
+    perceive target: tree where (each.size < 1#m and each.size > 0.2#m) in: view_dist {
     	focus id: tree_at_location var:location;
 	    ask myself {
 	        do remove_intention(find_tree, false);
@@ -84,9 +78,11 @@ species wapiti skills: [moving] control: simple_bdi {
     		do goto target: target;
     		if (target = location) {
     			tree current_tree <- tree first_with (target = each.location);
-    			if current_tree.size < 1#m {
+    			if (current_tree.size < 1#m and current_tree.size > 0.2#m) {
     				do add_belief(is_available);
-    				ask current_tree {size <- 0.1#m;}
+    				ask current_tree {
+    					size <- 0.0;
+    				}
     			} else {
     				do add_belief(new_predicate(not_available_location, ["location_value"::target]));
     			}
@@ -116,13 +112,13 @@ species wapiti skills: [moving] control: simple_bdi {
 species tree {
 	float max_perimeter <- 50.0 #m;
 	float max_height <- 50.0 #m;
-	float tree_grow<- rnd(0.000057#cm, 0.000114#cm);
-	float size <- rnd(2.0 #m, 5.0 #m) max: max_height update: size + tree_grow;
+	float tree_grow<- rnd(0.01#cm, 0.02#cm);
+	float size <- rnd(0.2 #m, 0.3 #m) max: max_height update: size + tree_grow;
 	float proba_spread <- prey_proba_spread;
 	bool can_spread <- true;
-	rgb color <- #green;
+	rgb color <- (size > 0) ? rgb(112, 137, 53) : #brown;
 	
-	reflex spread when: (size >= max_height / 2) and (flip(proba_spread)) and (can_spread = true) {
+	reflex spread when: (size >= max_height / 4) and (flip(proba_spread)) and (can_spread = true) {
 		int nb_seeds <- 3;
 		create species(self) number: nb_seeds {
 			point new_location <- myself.location + {rnd(-max_perimeter, max_perimeter), rnd(-max_perimeter, max_perimeter)};
@@ -143,37 +139,11 @@ species tree {
 	}
 }
 
-species aspen parent: tree {
-	float max_height <- 20.0 #m;
-	rgb color <- (size > 0) ? rgb(224, 150, 20) : #brown;
-	aspect default {
-		draw square(200 #cm + size) color: color border: #black;	
-	}
-}
-
-species cottonwood parent: tree {
-	float max_height <- 40.0 #m;
-	rgb color <- (size > 0) ? rgb(112, 137, 53) : #brown;
-	aspect default {
-		draw square(200 #cm + size) color: color border: #black;	
-	}
-}
-
-species willow parent: tree {
-	float max_height <- 8.0 #m;
-	rgb color <- (size > 0) ? rgb(51, 71, 1) : #brown;
-	aspect default {
-		draw square(50 #cm + size) color: color border: #black;	
-	}
-}
-
 experiment TreeBdi type: gui {
 
 	output {
 		display map type: opengl {
-			species aspen;
-			species cottonwood;
-			species willow;
+			species tree;
 			
 			species wapiti;
 		}
