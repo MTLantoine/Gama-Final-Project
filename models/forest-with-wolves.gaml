@@ -5,6 +5,8 @@
 * Tags: 
 */
 
+// Simulation avec les trois espèces, les loups, les arbres et les wapitis
+
 
 model finalproject
 
@@ -73,6 +75,8 @@ global {
 	}
 }
 
+// Espèce arbres
+
 species tree {
 	float max_perimeter <- 50.0 #m;
 	float max_height <- rnd(30.0, 50.0) #m;
@@ -80,10 +84,14 @@ species tree {
 	float size <- rnd(0.2 #m, 0.3 #m) max: max_height update: size + tree_grow;
 	float proba_spread <- tree_proba_spread;
 	bool can_spread <- true;
-	
+
+// Changement de couleur en fonction de l'age de l'arbre
+
 	float colorChange <- 0.0 max: 1.0 update: colorChange+0.00005;
 	rgb changingColor <- rgb(int(152 * (1 - colorChange)), 251, int(152 * (1 - colorChange))) update: rgb(int(152 * (1 - colorChange)), 251, int(152 * (1 - colorChange)));
-	
+
+// Gestion de la propagation des arbres
+
 	reflex spread when: (size >= 1.0#m) and (flip(proba_spread)) and (can_spread = true) {
 		int nb_seeds <- 4;
 		create species(self) number: nb_seeds {
@@ -109,6 +117,8 @@ species tree {
 	}
 }
 
+// Espèce animal, permet de faire hériter les espèces loup / wapiti
+
 species animal skills: [moving] control: simple_bdi {
     
     float view_dist;
@@ -118,11 +128,15 @@ species animal skills: [moving] control: simple_bdi {
     float proba_spread;
     rgb color <- sexe = "female" ? rgb(182, 165, 143) : rgb(155, 107, 89);
     
-    // ENERGY
+    // Gestion de l'énergie des animaux
+    
 	float max_energy;
 	float energy_consum;
 	int possible_reproduction;
     float energy <- rnd(max_energy) update: energy - energy_consum max: max_energy;
+    
+   
+   // Reproduction selon la quantité d'énergie
     
     reflex reproduce when: ((energy > 0.6 and flip(proba_spread) and sexe="female" and possible_reproduction > 0) or (possible_reproduction <= -10 and flip(proba_spread))) {
     	int nb_child <- 1;
@@ -144,6 +158,8 @@ species animal skills: [moving] control: simple_bdi {
     }
 }
 
+// Gestion des wapitis, hérite d'animal
+
 species wapiti parent: animal {
 	float view_dist <- 20.0 #m;
     float speed <- 1.0#km/#h;
@@ -156,10 +172,13 @@ species wapiti parent: animal {
 	
 	int possible_reproduction <- rnd(6, 10);
 	
+	// Les wapitis démarrent avec la volonté de trouver des arbres
+	
 	init {
         do add_desire(find_tree);
     }
     
+    // Gestion de la perception des arbres
     perceive target: tree in: view_dist {
     	focus id: tree_at_location var:location;
 	    ask myself {
@@ -167,13 +186,16 @@ species wapiti parent: animal {
 	    }
     }
     
+    // Belief des wapitis
     rule belief: tree_location new_desire: is_available strength: 2.0;
     rule belief: eat_tree new_desire: can_eat_tree strength: 5.0;
     
+    // Les wapitis se déplacent aléatoirement à la recherche d'un arbre
     plan lets_wander intention: find_tree  {
         do wander;
     }
     
+ 	// Permet aux wapitis de manger les arbres
     plan eat_tree intention: is_available {
     	if (target = nil) {
     		do add_subintention(get_current_intention(), choose_tree, true);
@@ -196,6 +218,7 @@ species wapiti parent: animal {
     	}
     }
     
+    // Les wapitis cherchent l'arbre le plus proche
     plan choose_closest_tree intention: choose_tree instantaneous: true {
     	list<point> possible_trees <- get_beliefs_with_name(tree_at_location) collect (point(get_predicate(mental_state (each)).values["location_value"]));
     	list<point> not_available_trees <- get_beliefs_with_name(not_available_location) collect (point(get_predicate(mental_state (each)).values["location_value"]));
@@ -214,6 +237,8 @@ species wapiti parent: animal {
     }
 }
 
+// Espèce loup, hérite d'animal
+
 species wolf parent: animal {
 	float view_dist <- 10.0 #m;
     float speed <- 0.8#km/#h;
@@ -227,9 +252,12 @@ species wolf parent: animal {
 	
 	int possible_reproduction <- -10;
 	
+	// Les loups démarrent avec la volonté de trouver des wapitis
 	init {
         do add_desire(find_wapiti);
     }
+    
+    // Dès qu'un loup détecte un wapiti, il va sur sa position
     
     perceive target: wapiti where (each.energy > 0) in: view_dist {
     	focus id: wapiti_at_location var:location;
@@ -239,13 +267,16 @@ species wolf parent: animal {
 	    }
     }
     
+    // Belief des wapitis
     rule belief: wapiti_location new_desire: is_alive strength: 2.0;
     rule belief: eat_wapiti new_desire: can_eat_wapiti strength: 5.0;
     
+    // Les loups se déplacent alétoirement jusqu'a trouver un wapiti
     plan lets_wander intention: find_wapiti {
         do wander;
     }
     
+    // Les loups mangent les wapitis qu'ils croisent
     plan eat_wapiti intention: is_alive{
     	if (target = nil) {
     		do add_subintention(get_current_intention(), choose_wapiti, true);
@@ -269,6 +300,7 @@ species wolf parent: animal {
     	}
     }
     
+    // Les loups choisissent le wapiti le plus proche
     plan choose_closest_wapiti intention: choose_wapiti instantaneous: true {
     	list<point> possible_wapiti <- get_beliefs_with_name(wapiti_at_location) collect (point(get_predicate(mental_state (each)).values["location_value"]));
     	list<point> no_available_wapitis <- get_beliefs_with_name(no_wapiti_location) collect (point(get_predicate(mental_state (each)).values["location_value"]));
@@ -286,6 +318,8 @@ species wolf parent: animal {
       draw circle(view_dist) color: color border: #black empty: true;
     }
 }
+
+// Experiment
 
 experiment TreeBdi type: gui {
 	parameter "Initial number of trees: " var: nb_tree_init min: 0 max: 500 category: "Tree";

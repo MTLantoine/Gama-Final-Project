@@ -5,6 +5,7 @@
 * Tags: 
 */
 
+// Simulation avec les arbres et les wapitis, sans les loups
 
 model finalproject
 
@@ -55,6 +56,8 @@ global {
 	}
 }
 
+// Espèce arbres
+
 species tree {
 	float max_perimeter <- 50.0 #m;
 	float max_height <- rnd(30.0, 50.0) #m;
@@ -63,8 +66,12 @@ species tree {
 	float proba_spread <- tree_proba_spread;
 	bool can_spread <- true;
 	
+// Changement de couleur en fonction de l'age de l'arbre
+
 	float colorChange <- 0.0 max: 1.0 update: colorChange+0.00005;
 	rgb changingColor <- rgb(int(152 * (1 - colorChange)), 251, int(152 * (1 - colorChange))) update: rgb(int(152 * (1 - colorChange)), 251, int(152 * (1 - colorChange)));
+	
+// Gestion de la propagation des arbres
 	
 	reflex spread when: (size >= 2.0#m) and (flip(proba_spread)) and (can_spread = true) {
 		int nb_seeds <- 3;
@@ -91,6 +98,8 @@ species tree {
 	}
 }
 
+// Gestion des wapitis
+
 species wapiti skills: [moving] control: simple_bdi {
     
     float view_dist <- 20.0 #m;
@@ -108,9 +117,13 @@ species wapiti skills: [moving] control: simple_bdi {
 	int possible_reproduction <- rnd(1, 3);
     float energy <- rnd(max_energy) update: energy - energy_consum max: max_energy;
     
+    // Les wapitis démarrent avec la volonté de trouver des arbres
+    
     init {
         do add_desire(find_tree);
     }
+    
+    // Gestion de la perception des arbres
     
     perceive target: tree in: view_dist {
     	focus id: tree_at_location var:location;
@@ -119,12 +132,17 @@ species wapiti skills: [moving] control: simple_bdi {
 	    }
     }
     
+    // Belief des wapitis
+    
     rule belief: tree_location new_desire: is_available strength: 2.0;
     rule belief: eat_tree new_desire: can_eat strength: 5.0;
-        
+  
+    // Les wapitis se déplacent aléatoirement à la recherche d'un arbre
     plan lets_wander intention: find_tree  {
         do wander;
     }
+    
+    // Permet aux wapitis de manger les arbres
     
     plan eat_tree intention: is_available {
     	if (target = nil) {
@@ -148,6 +166,8 @@ species wapiti skills: [moving] control: simple_bdi {
     	}
     }
     
+    // Les wapitis choisissent l'arbre le plus proche
+    
     plan choose_closest_tree intention: choose_tree instantaneous: true {
     	list<point> possible_trees <- get_beliefs_with_name(tree_at_location) collect (point(get_predicate(mental_state (each)).values["location_value"]));
     	list<point> not_available_trees <- get_beliefs_with_name(not_available_location) collect (point(get_predicate(mental_state (each)).values["location_value"]));
@@ -159,6 +179,8 @@ species wapiti skills: [moving] control: simple_bdi {
     	}
     	do remove_intention(choose_tree, true);
     }
+    
+    // Reproduction selon la quantité d'énergie
     
     reflex reproduce when: (energy > 0.6 and flip(proba_spread) and sexe="female" and possible_reproduction > 0) {
     	int nb_child <- 1;
@@ -177,6 +199,8 @@ species wapiti skills: [moving] control: simple_bdi {
       draw circle(view_dist) color: color border: #black empty: true;
     }
 }
+
+// EXPERIMENT
 
 experiment TreeBdi type: gui {
 	parameter "Initial number of trees: " var: nb_tree_init min: 0 max: 500 category: "Tree";
