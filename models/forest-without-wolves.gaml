@@ -49,6 +49,10 @@ global {
 		
 		create wapiti number: nb_wapiti_init;
 	}
+	
+	reflex stop_simulation when: (nb_wapitis = 0) {
+		do pause;
+	}
 }
 
 species tree {
